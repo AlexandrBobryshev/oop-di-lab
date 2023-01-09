@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="ru"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ContainerImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">oop-di-lab</a> &gt; <a href="index.source.html" class="el_package">org.fpm.di</a> &gt; <span class="el_source">ContainerImpl.java</span></div><h1>ContainerImpl.java</h1><pre class="source lang-java linenums">package org.fpm.di;
+
+import javassist.ClassMap;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import java.lang.reflect.*;
+import java.util.*;
+
+public class ContainerImpl implements Container{
+
+    private Map&lt;Class&lt;?&gt;, Class&lt;?&gt;&gt; classMap;
+    private Map&lt;Class&lt;?&gt;, Object&gt; instanceMap;
+<span class="fc" id="L14">    private static Map&lt;Class&lt;?&gt;, Object&gt; singletonMap = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L16">    public ContainerImpl(BinderImpl binder){</span>
+<span class="fc" id="L17">        this.classMap = binder.getClassMap();</span>
+<span class="fc" id="L18">        this.instanceMap = binder.getInstanceMap();</span>
+<span class="fc" id="L19">    }</span>
+
+    // injectionGraph
+    private void removeFromMap(Class&lt;?&gt; clazz){
+<span class="fc" id="L23">        List&lt;Class&lt;?&gt;&gt; keys = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L24" title="All 2 branches covered.">        for(Class&lt;?&gt; i: classMap.keySet()){</span>
+<span class="fc" id="L25">            Class&lt;?&gt; cls = classMap.get(i);</span>
+<span class="fc bfc" id="L26" title="All 2 branches covered.">            if(clazz.equals(cls)){</span>
+<span class="fc" id="L27">                keys.add(i);</span>
+            }
+<span class="fc" id="L29">        }</span>
+
+<span class="fc bfc" id="L31" title="All 2 branches covered.">        if(keys.size() != 0){</span>
+<span class="fc bfc" id="L32" title="All 2 branches covered.">            for (Class&lt;?&gt; key : keys){</span>
+<span class="fc" id="L33">                classMap.remove(key);</span>
+<span class="fc" id="L34">                instanceMap.put(key, instanceMap.get(clazz));</span>
+<span class="fc" id="L35">            }</span>
+<span class="fc bfc" id="L36" title="All 2 branches covered.">            for(Class&lt;?&gt; key: keys){</span>
+<span class="fc" id="L37">                removeFromMap(key);</span>
+<span class="fc" id="L38">            }</span>
+        }
+<span class="fc" id="L40">    }</span>
+
+    @Override
+    public &lt;T&gt; T getComponent(Class&lt;T&gt; clazz){
+
+<span class="fc bfc" id="L45" title="All 2 branches covered.">        for(Class&lt;?&gt; i: instanceMap.keySet()){</span>
+<span class="fc" id="L46">            removeFromMap(i);</span>
+<span class="fc" id="L47">        }</span>
+
+<span class="fc" id="L49">        boolean isSingleton = clazz.isAnnotationPresent(Singleton.class);</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        if (isSingleton) {</span>
+<span class="fc bfc" id="L51" title="All 2 branches covered.">            if(singletonMap.containsKey(clazz)) return (T) singletonMap.get(clazz);</span>
+        }
+
+<span class="fc" id="L54">        Class&lt;?&gt; implementationClass = null;</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        if(classMap.containsKey(clazz)) implementationClass = classMap.get(clazz);</span>
+
+<span class="fc" id="L57">        T instance = null;</span>
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        if(instanceMap.containsKey(clazz)) instance = (T) instanceMap.get(clazz);</span>
+
+<span class="fc bfc" id="L60" title="All 4 branches covered.">        if(implementationClass == null &amp;&amp; instance == null){</span>
+<span class="fc" id="L61">            throw new RuntimeException(&quot;Р’Рё РЅРµ РїРµСЂРµРґР°Р»Рё С†РµР№ РєР»Р°СЃ РІ РєРѕРЅС„С–РіСѓСЂР°С†С–СЋ!&quot;);</span>
+        }
+
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        if(instance == null){</span>
+
+<span class="fc" id="L66">            Constructor&lt;?&gt;[] constructors = implementationClass.getDeclaredConstructors();</span>
+<span class="fc" id="L67">            List &lt;Constructor&lt;?&gt;&gt; actualConstructors = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">            if(constructors.length &gt; 1){</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">                for(Constructor&lt;?&gt; constructor: constructors){</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">                    if (constructor.isAnnotationPresent(Inject.class)){</span>
+<span class="fc" id="L71">                        actualConstructors.add(constructor);</span>
+                    }
+                }
+
+<span class="fc bfc" id="L75" title="All 2 branches covered.">                if(actualConstructors.size() == 0){</span>
+<span class="fc" id="L76">                    throw new RuntimeException(&quot;Р”Р»СЏ С†СЊРѕРіРѕ РєР»Р°СЃСѓ С–СЃРЅСѓС” РґРµРєС–Р»СЊРєР° РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂС–РІ! РќРµРјР°С” РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР° Р· Р°РЅРѕС‚Р°С†С–С”СЋ @Inject&quot;);</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">                } else if(actualConstructors.size() &gt; 1){</span>
+<span class="fc" id="L78">                    throw new RuntimeException(&quot;Р”Р»СЏ С†СЊРѕРіРѕ РєР»Р°СЃСѓ С–СЃРЅСѓС” РґРµРєС–Р»СЊРєР° РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂС–РІ Р· Р°РЅРѕС‚Р°С†С–С”СЋ @Inject&quot;);</span>
+
+                }
+            }
+
+<span class="fc" id="L83">            actualConstructors.add(constructors[0]);</span>
+<span class="fc" id="L84">            Class[] paramTypes = actualConstructors.get(0).getParameterTypes();</span>
+
+<span class="fc" id="L86">            Object[] arg = new Object[paramTypes.length];</span>
+<span class="fc bfc" id="L87" title="All 2 branches covered.">            if (paramTypes.length &gt; 0) {</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">                for (int i = 0; i &lt; paramTypes.length; i++) {</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                    if (instanceMap.containsKey(paramTypes[i])) {</span>
+<span class="fc" id="L90">                        arg[i] = instanceMap.get(paramTypes[i]);</span>
+                    } else {
+<span class="fc" id="L92">                        arg[i] = getComponent(paramTypes[i]);</span>
+                    }
+                }
+            }
+
+            T implementationClassInstance;
+
+            try {
+<span class="fc" id="L100">                implementationClassInstance = (T) implementationClass.getDeclaredConstructor(paramTypes).newInstance(arg);</span>
+<span class="nc" id="L101">            } catch (NoSuchMethodException | InvocationTargetException | InstantiationException |</span>
+                     IllegalAccessException e) {
+<span class="nc" id="L103">                throw new RuntimeException(e);</span>
+<span class="fc" id="L104">            }</span>
+<span class="fc bfc" id="L105" title="All 2 branches covered.">            if(isSingleton) singletonMap.put(clazz, implementationClassInstance);</span>
+
+<span class="fc" id="L107">            return implementationClassInstance;</span>
+        }
+
+<span class="fc" id="L110">        return instance;</span>
+    }
+}
+
+// Juicer juicer = container.getComponent(Juicer.class)
+// Juicer juicer = new Juicer(getComponent(Peelable.class), getComponent(Peeler.class))
+// Juicer juicer = new Juicer(apple, new Peeler(getComponent(Peelable.class))
+// Juicer juicer = new Juicer(apple, new Peeler(apple))
+// Apple apple = new Apple();
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>
